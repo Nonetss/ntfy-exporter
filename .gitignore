@@ -1,0 +1,30 @@
+# Local env (secrets / tu máquina)
+.env
+
+# Binario local
+/ntfy-exporter
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test
+*.test
+*.out
+/coverage.out
+profile.cov
+
+# Go workspace (si lo usas)
+go.work
+go.work.sum
+
+# IDE / editor
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
