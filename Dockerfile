@@ -2,6 +2,8 @@
 
 FROM golang:1.24-alpine AS build
 WORKDIR /src
+# go.mod puede pedir una versión más nueva que la de la imagen; descarga la toolchain.
+ENV GOTOOLCHAIN=auto
 
 COPY go.mod go.sum* ./
 RUN go mod download
