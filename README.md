@@ -6,24 +6,20 @@ By default only `message` events are sent; `open` and `keepalive` are skipped un
 
 ## Grafana and dashboards
 
-To **visualize** these logs in Grafana you need:
+Importing the dashboard JSON **by itself does nothing useful**. This dashboard expects logs in **Loki** that were produced by the **ntfy → Loki exporter**. You therefore need:
 
-1. **This exporter** (or equivalent) writing to Loki with label `job` matching your setup (default `ntfy`).
-2. A **Loki data source** in Grafana pointed at the same Loki instance.
-3. A **dashboard** that queries those logs.
-
-**Official dashboards and import files live in this repository:**  
-[https://github.com/Nonetss/ntfy-exporter](https://github.com/Nonetss/ntfy-exporter)
-
-In the [`dashboard/`](https://github.com/Nonetss/ntfy-exporter/tree/main/dashboard) folder you will find:
+1. **Loki** receiving pushes from the exporter (same project).
+2. **The ntfy exporter** from **[github.com/Nonetss/ntfy-exporter](https://github.com/Nonetss/ntfy-exporter)** — source code, Docker image, and `compose.yml` are all in that repo. Run it against your ntfy server so ntfy events show up in Loki (default stream label `job="ntfy"`).
+3. **Grafana** with a **Loki data source** aimed at that Loki instance.
+4. Then import the dashboard files from the **`dashboard/`** folder in the same repository.
 
 | File | Use case |
 |------|----------|
-| `ntfy-dashboard.json` | **Grafana 13+** schema-style export (recommended for current Grafana). Import via **Dashboards → Import → Upload JSON**. |
-| `ntfy-dashboard.grafana.com.json` | **Classic** JSON (string datasources, `__inputs` for Loki). Use for [grafana.com dashboards](https://grafana.com/grafana/dashboards/) uploads or older Grafana versions. |
-| `ntfy-dashboard.yml` | YAML equivalent of the schema dashboard (if you manage dashboards as code). |
+| `ntfy-dashboard.json` | **Grafana 13+** schema-style export (recommended for current Grafana). **Dashboards → Import → Upload JSON**. |
+| `ntfy-dashboard.grafana.com.json` | **Classic** JSON (`__inputs` for Loki). For [grafana.com/dashboards](https://grafana.com/grafana/dashboards/) or older Grafana. |
+| `ntfy-dashboard.yml` | YAML for dashboards-as-code workflows. |
 
-After import, map the **Loki** data source when prompted. Queries assume streams like `{job="ntfy"}` and JSON log lines from ntfy events (`message`, `title`, `priority`, `topic`, etc., depending on what ntfy sends).
+After import, choose your **Loki** data source. Panel queries use `{job="ntfy"}` (or whatever you set via `LOKI_JOB`) and parse JSON fields such as `message`, `title`, `priority`, and `topic`.
 
 ## Requirements
 
