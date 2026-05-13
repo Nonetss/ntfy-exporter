@@ -16,7 +16,6 @@ Importing the dashboard JSON **by itself does nothing useful**. This dashboard e
 | File | Use case |
 |------|----------|
 | `ntfy-dashboard.json` | **Grafana 13+** schema-style export (recommended for current Grafana). **Dashboards → Import → Upload JSON**. |
-| `ntfy-dashboard.grafana.com.json` | **Classic** JSON (`__inputs` for Loki). For [grafana.com/dashboards](https://grafana.com/grafana/dashboards/) or older Grafana. |
 | `ntfy-dashboard.yml` | YAML for dashboards-as-code workflows. |
 
 After import, choose your **Loki** data source. Panel queries use `{job="ntfy"}` (or whatever you set via `LOKI_JOB`) and parse JSON fields such as `message`, `title`, `priority`, and `topic`.
