@@ -1,0 +1,7 @@
+.git
+.gitignore
+ntfy-exporter
+*.md
+docker-compose*.yml
+.env
+.env.*
