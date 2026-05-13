@@ -18,12 +18,14 @@ import (
 
 // NtfyEvent matches lines from GET /{topic}/json (newline-delimited JSON).
 type NtfyEvent struct {
-	ID      string `json:"id"`
-	Time    int64  `json:"time"`
-	Event   string `json:"event"`
-	Topic   string `json:"topic"`
-	Message string `json:"message"`
-	Expires int64  `json:"expires,omitempty"`
+	ID       string `json:"id"`
+	Time     int64  `json:"time"`
+	Event    string `json:"event"`
+	Topic    string `json:"topic"`
+	Title    string `json:"title,omitempty"`
+	Message  string `json:"message"`
+	Priority *int   `json:"priority,omitempty"`
+	Expires  int64  `json:"expires,omitempty"`
 }
 
 func main() {
@@ -89,7 +91,7 @@ func runTopicLoop(ctx context.Context, p *lokiPusher, baseURL, topic string, exp
 				return err
 			}
 			ts := ev.eventTime()
-			return p.push(ctx, ts, topic, ev.Event, string(line))
+			return p.push(ctx, ts, topic, ev.Event, ev.Priority, string(line))
 		})
 		if err != nil {
 			if ctx.Err() != nil {
@@ -192,17 +194,21 @@ type lokiStream struct {
 	Values [][2]string       `json:"values"`
 }
 
-func (p *lokiPusher) push(ctx context.Context, ts time.Time, topic, event, line string) error {
+func (p *lokiPusher) push(ctx context.Context, ts time.Time, topic, event string, priority *int, line string) error {
 	ns := fmt.Sprintf("%d", ts.UnixNano())
+	labels := map[string]string{
+		"job":    p.job,
+		"topic":  topic,
+		"source": "ntfy",
+		"event":  event,
+	}
+	if priority != nil {
+		labels["priority"] = fmt.Sprintf("%d", *priority)
+	}
 	body := lokiPushBody{
 		Streams: []lokiStream{
 			{
-				Stream: map[string]string{
-					"job":    p.job,
-					"topic":  topic,
-					"source": "ntfy",
-					"event":  event,
-				},
+				Stream: labels,
 				Values: [][2]string{{ns, line}},
 			},
 		},
