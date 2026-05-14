@@ -91,8 +91,8 @@ func runTopicLoop(ctx context.Context, p *lokiPusher, baseURL, topic string, exp
 				return nil
 			}
 			if printTitleFigure && ev.Event == "message" {
-				if title := strings.TrimSpace(ev.Title); title != "" {
-					figure.NewFigure(title, figureFont, false).Print()
+				if phrase := figurePhrase(ev); phrase != "" {
+					figure.NewFigure(phrase, figureFont, false).Print()
 					fmt.Println()
 				}
 			}
@@ -285,4 +285,40 @@ func firstNonEmpty(a, b string) string {
 func envBool(key string) bool {
 	v := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
 	return v == "1" || v == "true" || v == "yes" || v == "on"
+}
+
+const maxFigurePhraseRunes = 80
+
+// figurePhrase prefers the notification title; if empty (common with curl -d "…"),
+// uses the first line of the message body. Long text is truncated for sane terminal width.
+func figurePhrase(ev NtfyEvent) string {
+	if t := strings.TrimSpace(ev.Title); t != "" {
+		return truncateFigurePhrase(t)
+	}
+	return truncateFigurePhrase(firstLine(ev.Message))
+}
+
+func firstLine(s string) string {
+	s = strings.TrimSpace(s)
+	if i := strings.Index(s, "\r\n"); i >= 0 {
+		return strings.TrimSpace(s[:i])
+	}
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		return strings.TrimSpace(s[:i])
+	}
+	if i := strings.IndexByte(s, '\r'); i >= 0 {
+		return strings.TrimSpace(s[:i])
+	}
+	return s
+}
+
+func truncateFigurePhrase(s string) string {
+	r := []rune(strings.TrimSpace(s))
+	if len(r) == 0 {
+		return ""
+	}
+	if len(r) <= maxFigurePhraseRunes {
+		return string(r)
+	}
+	return string(r[:maxFigurePhraseRunes])
 }

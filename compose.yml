@@ -1,5 +1,7 @@
 services:
   ntfy-exporter:
+    # Uncomment to build from this repo (e.g. GHCR `latest` older than go-figure support):
+    # build: .
     image: ghcr.io/nonetss/ntfy-exporter:latest
     restart: unless-stopped
     # extra_hosts:
