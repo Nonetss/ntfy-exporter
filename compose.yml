@@ -2,14 +2,16 @@ services:
   ntfy-exporter:
     image: ghcr.io/nonetss/ntfy-exporter:latest
     restart: unless-stopped
-   #extra_hosts:
-   #  - "host.docker.internal:host-gateway"
+    # extra_hosts:
+    #   - "host.docker.internal:host-gateway"
     environment:
       NTFY_URL: ${NTFY_URL:?set NTFY_URL in .env or the shell}
       NTFY_TOPICS: ${NTFY_TOPICS:?set NTFY_TOPICS in .env or the shell}
       LOKI_URL: ${LOKI_URL:?set LOKI_URL in .env or the shell}
       LOKI_JOB: ${LOKI_JOB:-ntfy}
       NTFY_EXPORT_ALL_EVENTS: ${NTFY_EXPORT_ALL_EVENTS:-}
+      NTFY_PRINT_TITLE_FIGURE: ${NTFY_PRINT_TITLE_FIGURE:-}
+      NTFY_TITLE_FIGURE_FONT: ${NTFY_TITLE_FIGURE_FONT:-}
       LOKI_TENANT_ID: ${LOKI_TENANT_ID:-}
       LOKI_BASIC_AUTH_USER: ${LOKI_BASIC_AUTH_USER:-}
       LOKI_BASIC_AUTH_PASSWORD: ${LOKI_BASIC_AUTH_PASSWORD:-}

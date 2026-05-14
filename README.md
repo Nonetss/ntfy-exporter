@@ -34,6 +34,8 @@ After import, choose your **Loki** data source. Panel queries use `{job="ntfy"}`
 | `LOKI_URL` | Yes | Loki base URL (e.g. `http://localhost:3100`). |
 | `LOKI_JOB` | No | Loki `job` label. Default: `ntfy`. |
 | `NTFY_EXPORT_ALL_EVENTS` | No | If `1`, `true`, `yes`, or `on`, also forwards `open` and `keepalive`. |
+| `NTFY_PRINT_TITLE_FIGURE` | No | If `1`, `true`, `yes`, or `on`, prints each `message` event’s non-empty `title` as ASCII art ([go-figure](https://github.com/common-nighthawk/go-figure)) to stdout (visible in `docker compose logs`). |
+| `NTFY_TITLE_FIGURE_FONT` | No | Font name without `.flf` (embedded fonts from go-figure). Empty uses `standard`. Examples: `banner3-D`, `doom`, `dotmatrix`. Invalid names panic at runtime. |
 | `LOKI_TENANT_ID` | No | Sets `X-Scope-OrgID` for multi-tenant Loki. |
 | `LOKI_BASIC_AUTH_USER` / `LOKI_BASIC_AUTH_PASSWORD` | No | Basic auth toward Loki. |
 
@@ -72,6 +74,8 @@ cp .env.example .env
 
 docker compose up -d
 ```
+
+Optional settings from `.env.example` are passed through in `compose.yml`, including `NTFY_PRINT_TITLE_FIGURE` and `NTFY_TITLE_FIGURE_FONT` (ASCII title art to container stdout / `docker compose logs`).
 
 If Loki runs on the host and you set `LOKI_URL=http://host.docker.internal:3100`, on Linux you often need this in `compose.yml`:
 
