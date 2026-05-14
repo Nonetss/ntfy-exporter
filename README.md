@@ -53,6 +53,14 @@ cp .env.example .env
 go run ./cmd/main
 ```
 
+With `NTFY_TITLE_FIGURE_RENDERER=blocklet`, install the blocklet CLI separately (Rust crate, **not** `go install`), for example:
+
+```bash
+cargo install --git https://github.com/tanav-malhotra/blocklet --tag v0.1.2
+```
+
+Or rely on the Docker image, which bundles `blocklet` in `/usr/local/bin`.
+
 Or build a binary:
 
 ```bash
@@ -78,7 +86,7 @@ cp .env.example .env
 docker compose up -d
 ```
 
-Optional settings from `.env.example` are passed through in `compose.yml`, including figure rendering (`NTFY_PRINT_TITLE_FIGURE`, `NTFY_TITLE_FIGURE_RENDERER`, `NTFY_TITLE_FIGURE_FONT`, `NTFY_BLOCKLET_*`). The multi-stage **Dockerfile** builds [blocklet](https://github.com/tanav-malhotra/blocklet) `v0.1.3` and installs it beside `ntfy-exporter`; set `NTFY_TITLE_FIGURE_RENDERER=blocklet` to use it.
+Optional settings from `.env.example` are passed through in `compose.yml`, including figure rendering (`NTFY_PRINT_TITLE_FIGURE`, `NTFY_TITLE_FIGURE_RENDERER`, `NTFY_TITLE_FIGURE_FONT`, `NTFY_BLOCKLET_*`). The multi-stage **Dockerfile** builds [blocklet](https://github.com/tanav-malhotra/blocklet) tag `v0.1.2` and installs it beside `ntfy-exporter`; set `NTFY_TITLE_FIGURE_RENDERER=blocklet` to use it.
 
 If figures never appear, your registry image may predate this feature: build locally (`docker build -t ntfy-exporter:local .` and point `compose.yml` at that image, or add `build: .` under the service) so the binary matches this repo.
 

@@ -1,6 +1,6 @@
 services:
   ntfy-exporter:
-    # Uncomment to build from this repo (e.g. GHCR `latest` older than go-figure support):
+    # Uncomment to build from this repo (ASCII backends / bundled blocklet CLI):
     # build: .
     image: ghcr.io/nonetss/ntfy-exporter:latest
     restart: unless-stopped

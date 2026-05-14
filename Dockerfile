@@ -3,7 +3,7 @@
 FROM rust:1.84-alpine AS blocklet
 RUN apk add --no-cache musl-dev git \
 	&& cargo install --git https://github.com/tanav-malhotra/blocklet \
-		--rev v0.1.3 \
+		--rev v0.1.2 \
 		--root /opt/blocklet
 
 FROM golang:1.26-alpine AS build
