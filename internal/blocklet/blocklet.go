@@ -5,13 +5,14 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 )
 
-// Render invokes blocklet with phrase as a single argument. If font is non-empty it is passed as -f FONT;
-// otherwise --no-shadow is used (standard_solid, █ blocks without box-drawing shadow).
-func Render(ctx context.Context, bin, phrase, font string) (string, error) {
+// Render invokes blocklet. If font is non-empty it is passed as -f FONT; otherwise --no-shadow.
+// If maxWidth > 0, passes -w for word-wrapped output width (blocklet-native).
+func Render(ctx context.Context, bin, phrase, font string, maxWidth int) (string, error) {
 	if bin == "" {
 		bin = "blocklet"
 	}
@@ -20,6 +21,9 @@ func Render(ctx context.Context, bin, phrase, font string) (string, error) {
 		args = append(args, "-f", strings.TrimSpace(font))
 	} else {
 		args = append(args, "--no-shadow")
+	}
+	if maxWidth > 0 {
+		args = append(args, "-w", strconv.Itoa(maxWidth))
 	}
 	args = append(args, phrase)
 

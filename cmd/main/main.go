@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -66,6 +67,7 @@ func main() {
 	exportAll := envBool("NTFY_EXPORT_ALL_EVENTS")
 	printTitleFigure := envBool("NTFY_PRINT_TITLE_FIGURE")
 	blockletPath, _ := exec.LookPath("blocklet")
+	figureLineWidth := envFigureLineWidth()
 
 	pusher := newLokiPusher(lokiURL, job)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -77,13 +79,13 @@ func main() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			runTopicLoop(ctx, pusher, baseURL, topic, exportAll, printTitleFigure, blockletPath)
+			runTopicLoop(ctx, pusher, baseURL, topic, exportAll, printTitleFigure, blockletPath, figureLineWidth)
 		}()
 	}
 	wg.Wait()
 }
 
-func runTopicLoop(ctx context.Context, p *lokiPusher, baseURL, topic string, exportAll, printTitleFigure bool, blockletPath string) {
+func runTopicLoop(ctx context.Context, p *lokiPusher, baseURL, topic string, exportAll, printTitleFigure bool, blockletPath string, figureLineWidth int) {
 	backoff := time.Second
 	const maxBackoff = 30 * time.Second
 	streamURL := fmt.Sprintf("%s/%s/json", baseURL, topic)
@@ -102,8 +104,8 @@ func runTopicLoop(ctx context.Context, p *lokiPusher, baseURL, topic string, exp
 			}
 			var figureASCII string
 			if printTitleFigure && ev.Event == "message" {
-				if phrase := figurePhrase(ev); phrase != "" {
-					figureASCII = renderASCII(ctx, logger, phrase, blockletPath)
+				if phrase := figurePhrase(ev, figureLineWidth); phrase != "" {
+					figureASCII = renderASCII(ctx, logger, phrase, blockletPath, figureLineWidth)
 					if figureASCII != "" {
 						fmt.Println(figureASCII)
 						fmt.Println()
@@ -301,15 +303,128 @@ func envBool(key string) bool {
 	return v == "1" || v == "true" || v == "yes" || v == "on"
 }
 
-const maxFigurePhraseRunes = 80
-
-// figurePhrase prefers the notification title; if empty (common with curl -d "…"),
-// uses the first line of the message body. Long text is truncated for sane terminal width.
-func figurePhrase(ev NtfyEvent) string {
-	if t := strings.TrimSpace(ev.Title); t != "" {
-		return truncateFigurePhrase(t)
+func envFigureLineWidth() int {
+	s := strings.TrimSpace(os.Getenv("NTFY_FIGURE_LINE_WIDTH"))
+	if s == "" {
+		return 0
 	}
-	return truncateFigurePhrase(firstLine(ev.Message))
+	n, err := strconv.Atoi(s)
+	if err != nil || n < 0 {
+		return 0
+	}
+	return n
+}
+
+const maxFigurePhraseRunes = 80
+const maxFigurePhraseSafetyRunes = 4096
+
+// figurePhrase prefers the notification title; if empty, uses the first line of the message.
+// With lineWidth<=0, caps at maxFigurePhraseRunes. With lineWidth>0, only a safety cap applies.
+func figurePhrase(ev NtfyEvent, lineWidth int) string {
+	var raw string
+	if t := strings.TrimSpace(ev.Title); t != "" {
+		raw = t
+	} else {
+		raw = firstLine(ev.Message)
+	}
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	raw = truncateRunes(raw, maxFigurePhraseSafetyRunes)
+	if lineWidth <= 0 {
+		return truncateRunes(raw, maxFigurePhraseRunes)
+	}
+	return normalizeLongWords(raw, lineWidth)
+}
+
+func truncateRunes(s string, max int) string {
+	r := []rune(strings.TrimSpace(s))
+	if len(r) == 0 {
+		return ""
+	}
+	if len(r) <= max {
+		return string(r)
+	}
+	return string(r[:max])
+}
+
+// normalizeLongWords splits whitespace-separated tokens longer than maxRunes into chunks (blocklet + go-figure need this).
+func normalizeLongWords(s string, maxRunes int) string {
+	if maxRunes <= 0 {
+		return s
+	}
+	fields := strings.Fields(s)
+	if len(fields) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	for i, f := range fields {
+		if i > 0 {
+			b.WriteByte(' ')
+		}
+		chunks := splitRunesMax(f, maxRunes)
+		for j, c := range chunks {
+			if j > 0 {
+				b.WriteByte(' ')
+			}
+			b.WriteString(c)
+		}
+	}
+	return b.String()
+}
+
+func splitRunesMax(s string, max int) []string {
+	r := []rune(s)
+	if len(r) <= max {
+		return []string{s}
+	}
+	var out []string
+	for i := 0; i < len(r); i += max {
+		j := i + max
+		if j > len(r) {
+			j = len(r)
+		}
+		out = append(out, string(r[i:j]))
+	}
+	return out
+}
+
+// logicalLines wraps words so each line is at most maxRunes runes (including spaces between words).
+func logicalLines(s string, maxRunes int) []string {
+	if maxRunes <= 0 {
+		return []string{s}
+	}
+	words := strings.Fields(s)
+	if len(words) == 0 {
+		return nil
+	}
+	var lines []string
+	var cur []string
+	curLen := 0
+	flush := func() {
+		if len(cur) > 0 {
+			lines = append(lines, strings.Join(cur, " "))
+			cur = nil
+			curLen = 0
+		}
+	}
+	for _, w := range words {
+		for _, chunk := range splitRunesMax(w, maxRunes) {
+			wl := utf8.RuneCountInString(chunk)
+			sep := 0
+			if len(cur) > 0 {
+				sep = 1
+			}
+			if len(cur) > 0 && curLen+sep+wl > maxRunes {
+				flush()
+			}
+			cur = append(cur, chunk)
+			curLen += sep + wl
+		}
+	}
+	flush()
+	return lines
 }
 
 func firstLine(s string) string {
@@ -326,28 +441,36 @@ func firstLine(s string) string {
 	return s
 }
 
-func truncateFigurePhrase(s string) string {
-	r := []rune(strings.TrimSpace(s))
-	if len(r) == 0 {
-		return ""
-	}
-	if len(r) <= maxFigurePhraseRunes {
-		return string(r)
-	}
-	return string(r[:maxFigurePhraseRunes])
-}
-
-func renderASCII(ctx context.Context, logger *slog.Logger, phrase, blockletPath string) string {
+func renderASCII(ctx context.Context, logger *slog.Logger, phrase, blockletPath string, lineWidth int) string {
 	if blockletPath != "" {
-		out, err := blocklet.Render(ctx, blockletPath, phrase, "")
+		out, err := blocklet.Render(ctx, blockletPath, phrase, "", lineWidth)
 		if err == nil {
 			s := polishBlockletFigure(strings.TrimRight(out, "\n"))
 			return applyFigureHash(s, true)
 		}
 		logger.Warn("blocklet failed, using go-figure", "err", err)
 	}
-	s := renderGoFigure(logger, phrase)
+	var s string
+	if lineWidth <= 0 {
+		s = renderGoFigure(logger, phrase)
+	} else {
+		s = renderGoFigureWrapped(logger, logicalLines(phrase, lineWidth))
+	}
 	return applyFigureHash(s, false)
+}
+
+func renderGoFigureWrapped(logger *slog.Logger, lines []string) string {
+	var parts []string
+	for _, ln := range lines {
+		ln = strings.TrimSpace(ln)
+		if ln == "" {
+			continue
+		}
+		if fig := renderGoFigure(logger, ln); fig != "" {
+			parts = append(parts, fig)
+		}
+	}
+	return strings.Join(parts, "\n\n")
 }
 
 func polishBlockletFigure(s string) string {
