@@ -30,6 +30,12 @@ type NtfyEvent struct {
 	Expires  int64  `json:"expires,omitempty"`
 }
 
+// lokiEventLine is stored in Loki: same fields as ntfy plus optional exporter-only fields.
+type lokiEventLine struct {
+	NtfyEvent
+	FigureASCII string `json:"figure_ascii,omitempty"`
+}
+
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
@@ -90,13 +96,16 @@ func runTopicLoop(ctx context.Context, p *lokiPusher, baseURL, topic string, exp
 			if !exportAll && ev.Event != "message" {
 				return nil
 			}
+			var figureASCII string
 			if printTitleFigure && ev.Event == "message" {
 				if phrase := figurePhrase(ev); phrase != "" {
-					figure.NewFigure(phrase, figureFont, false).Print()
+					fig := figure.NewFigure(phrase, figureFont, false)
+					figureASCII = strings.TrimRight(fig.String(), "\n")
+					fmt.Println(figureASCII)
 					fmt.Println()
 				}
 			}
-			line, err := json.Marshal(ev)
+			line, err := json.Marshal(lokiEventLine{NtfyEvent: ev, FigureASCII: figureASCII})
 			if err != nil {
 				return err
 			}

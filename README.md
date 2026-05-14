@@ -34,12 +34,12 @@ After import, choose your **Loki** data source. Panel queries use `{job="ntfy"}`
 | `LOKI_URL` | Yes | Loki base URL (e.g. `http://localhost:3100`). |
 | `LOKI_JOB` | No | Loki `job` label. Default: `ntfy`. |
 | `NTFY_EXPORT_ALL_EVENTS` | No | If `1`, `true`, `yes`, or `on`, also forwards `open` and `keepalive`. |
-| `NTFY_PRINT_TITLE_FIGURE` | No | If `1`, `true`, `yes`, or `on`, prints ASCII art ([go-figure](https://github.com/common-nighthawk/go-figure)) for each `message` event to stdout (`docker compose logs`). Uses **title** when set; otherwise the **first line of `message`** (typical `curl -d "…"` publishes have no title). Text longer than 80 runes is truncated. |
+| `NTFY_PRINT_TITLE_FIGURE` | No | If `1`, `true`, `yes`, or `on`, prints ASCII art ([go-figure](https://github.com/common-nighthawk/go-figure)) for each `message` event to stdout (`docker compose logs`) **and** adds a `figure_ascii` field (multiline string) to the JSON pushed to Loki. Uses **title** when set; otherwise the **first line of `message`**. Text longer than 80 runes is truncated. |
 | `NTFY_TITLE_FIGURE_FONT` | No | Font name without `.flf` (embedded fonts from go-figure). Empty uses `standard`. Examples: `banner3-D`, `doom`, `dotmatrix`. Invalid names panic at runtime. |
 | `LOKI_TENANT_ID` | No | Sets `X-Scope-OrgID` for multi-tenant Loki. |
 | `LOKI_BASIC_AUTH_USER` / `LOKI_BASIC_AUTH_PASSWORD` | No | Basic auth toward Loki. |
 
-Each log line stored in Loki is the full ntfy event JSON. Stream labels include `job`, `topic`, `source=ntfy`, and `event`, plus `priority` when present.
+Each log line stored in Loki is JSON: all ntfy event fields, plus **`figure_ascii`** when `NTFY_PRINT_TITLE_FIGURE` is enabled and a phrase was rendered. Stream labels include `job`, `topic`, `source=ntfy`, and `event`, plus `priority` when present.
 
 ## Run locally (Go)
 
@@ -94,6 +94,10 @@ extra_hosts:
 
 ```logql
 {job="ntfy", topic="alerts"} | json | line_format "{{.message}}"
+```
+
+```logql
+{job="ntfy"} | json | figure_ascii != "" | line_format "{{.figure_ascii}}"
 ```
 
 ## Reconnect behaviour
