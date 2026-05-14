@@ -445,18 +445,14 @@ func renderASCII(ctx context.Context, logger *slog.Logger, phrase, blockletPath 
 	if blockletPath != "" {
 		out, err := blocklet.Render(ctx, blockletPath, phrase, "", lineWidth)
 		if err == nil {
-			s := polishBlockletFigure(strings.TrimRight(out, "\n"))
-			return applyFigureHash(s, true)
+			return polishBlockletFigure(strings.TrimRight(out, "\n"))
 		}
 		logger.Warn("blocklet failed, using go-figure", "err", err)
 	}
-	var s string
 	if lineWidth <= 0 {
-		s = renderGoFigure(logger, phrase)
-	} else {
-		s = renderGoFigureWrapped(logger, logicalLines(phrase, lineWidth))
+		return renderGoFigure(logger, phrase)
 	}
-	return applyFigureHash(s, false)
+	return renderGoFigureWrapped(logger, logicalLines(phrase, lineWidth))
 }
 
 func renderGoFigureWrapped(logger *slog.Logger, lines []string) string {
@@ -502,26 +498,6 @@ func polishBlockletFigure(s string) string {
 		}
 	}
 	return b.String()
-}
-
-func applyFigureHash(s string, on bool) string {
-	if !on || s == "" {
-		return s
-	}
-	repl := strings.NewReplacer(
-		"█", "#",
-		"▀", "#",
-		"▄", "#",
-		"▌", "|",
-		"▐", "|",
-		"░", ".",
-		"▒", ":",
-		"▓", "#",
-		"╗", "+", "╔", "+", "╝", "+", "╚", "+",
-		"║", "|", "═", "-",
-		"╣", "+", "╠", "+", "╦", "+", "╩", "+", "╬", "+",
-	)
-	return repl.Replace(s)
 }
 
 func renderGoFigure(logger *slog.Logger, phrase string) string {
