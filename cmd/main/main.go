@@ -331,7 +331,11 @@ func figurePhrase(ev NtfyEvent, lineWidth int) string {
 	if lineWidth <= 0 {
 		return truncateRunes(raw, maxFigurePhraseRunes)
 	}
-	return normalizeLongWords(raw, lineWidth)
+	inputWrap := lineWidth / goFigureCharWidth
+	if inputWrap < 5 {
+		inputWrap = 5
+	}
+	return normalizeLongWords(raw, inputWrap)
 }
 
 func truncateRunes(s string, max int) string {
@@ -437,11 +441,19 @@ func firstLine(s string) string {
 	return s
 }
 
+// goFigureCharWidth is the approximate output column width per input character
+// in go-figure's default font (figlet "standard": ~8 cols including spacing).
+const goFigureCharWidth = 8
+
 func renderASCII(logger *slog.Logger, phrase string, lineWidth int) string {
 	if lineWidth <= 0 {
 		return renderGoFigure(logger, phrase)
 	}
-	return renderGoFigureWrapped(logger, logicalLines(phrase, lineWidth))
+	inputWrap := lineWidth / goFigureCharWidth
+	if inputWrap < 5 {
+		inputWrap = 5
+	}
+	return renderGoFigureWrapped(logger, logicalLines(phrase, inputWrap))
 }
 
 func renderGoFigureWrapped(logger *slog.Logger, lines []string) string {
