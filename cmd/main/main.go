@@ -11,16 +11,12 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-	"unicode/utf8"
 
 	"github.com/common-nighthawk/go-figure"
-
-	"ntfy-exporter/internal/blocklet"
 )
 
 // NtfyEvent matches lines from GET /{topic}/json (newline-delimited JSON).
@@ -66,7 +62,6 @@ func main() {
 	}
 	exportAll := envBool("NTFY_EXPORT_ALL_EVENTS")
 	printTitleFigure := envBool("NTFY_PRINT_TITLE_FIGURE")
-	blockletPath, _ := exec.LookPath("blocklet")
 	figureLineWidth := envFigureLineWidth()
 
 	pusher := newLokiPusher(lokiURL, job)
@@ -79,13 +74,13 @@ func main() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			runTopicLoop(ctx, pusher, baseURL, topic, exportAll, printTitleFigure, blockletPath, figureLineWidth)
+			runTopicLoop(ctx, pusher, baseURL, topic, exportAll, printTitleFigure, figureLineWidth)
 		}()
 	}
 	wg.Wait()
 }
 
-func runTopicLoop(ctx context.Context, p *lokiPusher, baseURL, topic string, exportAll, printTitleFigure bool, blockletPath string, figureLineWidth int) {
+func runTopicLoop(ctx context.Context, p *lokiPusher, baseURL, topic string, exportAll, printTitleFigure bool, figureLineWidth int) {
 	backoff := time.Second
 	const maxBackoff = 30 * time.Second
 	streamURL := fmt.Sprintf("%s/%s/json", baseURL, topic)
@@ -105,7 +100,7 @@ func runTopicLoop(ctx context.Context, p *lokiPusher, baseURL, topic string, exp
 			var figureASCII string
 			if printTitleFigure && ev.Event == "message" {
 				if phrase := figurePhrase(ev, figureLineWidth); phrase != "" {
-					figureASCII = renderASCII(ctx, logger, phrase, blockletPath, figureLineWidth)
+					figureASCII = renderASCII(logger, phrase, figureLineWidth)
 					if figureASCII != "" {
 						fmt.Println(figureASCII)
 						fmt.Println()
@@ -441,14 +436,7 @@ func firstLine(s string) string {
 	return s
 }
 
-func renderASCII(ctx context.Context, logger *slog.Logger, phrase, blockletPath string, lineWidth int) string {
-	if blockletPath != "" {
-		out, err := blocklet.Render(ctx, blockletPath, phrase, "", lineWidth)
-		if err == nil {
-			return polishBlockletFigure(strings.TrimRight(out, "\n"))
-		}
-		logger.Warn("blocklet failed, using go-figure", "err", err)
-	}
+func renderASCII(logger *slog.Logger, phrase string, lineWidth int) string {
 	if lineWidth <= 0 {
 		return renderGoFigure(logger, phrase)
 	}
@@ -469,36 +457,6 @@ func renderGoFigureWrapped(logger *slog.Logger, lines []string) string {
 	return strings.Join(parts, "\n\n")
 }
 
-func polishBlockletFigure(s string) string {
-	if s == "" {
-		return ""
-	}
-	lines := strings.Split(s, "\n")
-	for i := range lines {
-		lines[i] = strings.TrimRight(lines[i], " ")
-	}
-	for len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "" {
-		lines = lines[:len(lines)-1]
-	}
-	maxW := 0
-	for _, ln := range lines {
-		if w := utf8.RuneCountInString(ln); w > maxW {
-			maxW = w
-		}
-	}
-	var b strings.Builder
-	for i, ln := range lines {
-		if i > 0 {
-			b.WriteByte('\n')
-		}
-		b.WriteString(ln)
-		for utf8.RuneCountInString(ln) < maxW {
-			b.WriteByte(' ')
-			ln += " "
-		}
-	}
-	return b.String()
-}
 
 func renderGoFigure(logger *slog.Logger, phrase string) string {
 	try := func() (string, error) {
