@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/common-nighthawk/go-figure"
 )
@@ -456,7 +457,6 @@ func renderGoFigureWrapped(logger *slog.Logger, lines []string) string {
 	}
 	return strings.Join(parts, "\n\n")
 }
-
 
 func renderGoFigure(logger *slog.Logger, phrase string) string {
 	try := func() (string, error) {
