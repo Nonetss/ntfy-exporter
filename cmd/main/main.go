@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/common-nighthawk/go-figure"
 )
 
 // NtfyEvent matches lines from GET /{topic}/json (newline-delimited JSON).
@@ -52,6 +54,8 @@ func main() {
 		job = "ntfy"
 	}
 	exportAll := envBool("NTFY_EXPORT_ALL_EVENTS")
+	printTitleFigure := envBool("NTFY_PRINT_TITLE_FIGURE")
+	figureFont := strings.TrimSpace(os.Getenv("NTFY_TITLE_FIGURE_FONT"))
 
 	pusher := newLokiPusher(lokiURL, job)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -63,13 +67,13 @@ func main() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			runTopicLoop(ctx, pusher, baseURL, topic, exportAll)
+			runTopicLoop(ctx, pusher, baseURL, topic, exportAll, printTitleFigure, figureFont)
 		}()
 	}
 	wg.Wait()
 }
 
-func runTopicLoop(ctx context.Context, p *lokiPusher, baseURL, topic string, exportAll bool) {
+func runTopicLoop(ctx context.Context, p *lokiPusher, baseURL, topic string, exportAll, printTitleFigure bool, figureFont string) {
 	backoff := time.Second
 	const maxBackoff = 30 * time.Second
 	streamURL := fmt.Sprintf("%s/%s/json", baseURL, topic)
@@ -85,6 +89,12 @@ func runTopicLoop(ctx context.Context, p *lokiPusher, baseURL, topic string, exp
 		err := consumeStream(ctx, streamURL, func(ev NtfyEvent) error {
 			if !exportAll && ev.Event != "message" {
 				return nil
+			}
+			if printTitleFigure && ev.Event == "message" {
+				if title := strings.TrimSpace(ev.Title); title != "" {
+					figure.NewFigure(title, figureFont, false).Print()
+					fmt.Println()
+				}
 			}
 			line, err := json.Marshal(ev)
 			if err != nil {
