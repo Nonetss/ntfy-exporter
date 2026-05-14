@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1
 
-FROM rust:1.84-alpine AS blocklet
+# blocklet's transitive deps (e.g. clap 4.6+) need Cargo/rustc >= 1.85 (edition2024).
+FROM rust:1.85-alpine AS blocklet
 RUN apk add --no-cache musl-dev git \
 	&& cargo install --git https://github.com/tanav-malhotra/blocklet \
 		--rev v0.1.2 \
