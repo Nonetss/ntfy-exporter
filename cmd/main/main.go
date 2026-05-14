@@ -11,14 +11,15 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/exec"
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/common-nighthawk/go-figure"
 
 	"ntfy-exporter/internal/blocklet"
-	"ntfy-exporter/internal/figurecfg"
 )
 
 // NtfyEvent matches lines from GET /{topic}/json (newline-delimited JSON).
@@ -63,7 +64,8 @@ func main() {
 		job = "ntfy"
 	}
 	exportAll := envBool("NTFY_EXPORT_ALL_EVENTS")
-	fc := figurecfg.FromEnv()
+	printTitleFigure := envBool("NTFY_PRINT_TITLE_FIGURE")
+	blockletPath, _ := exec.LookPath("blocklet")
 
 	pusher := newLokiPusher(lokiURL, job)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -75,13 +77,13 @@ func main() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			runTopicLoop(ctx, pusher, baseURL, topic, exportAll, fc)
+			runTopicLoop(ctx, pusher, baseURL, topic, exportAll, printTitleFigure, blockletPath)
 		}()
 	}
 	wg.Wait()
 }
 
-func runTopicLoop(ctx context.Context, p *lokiPusher, baseURL, topic string, exportAll bool, fc figurecfg.Config) {
+func runTopicLoop(ctx context.Context, p *lokiPusher, baseURL, topic string, exportAll, printTitleFigure bool, blockletPath string) {
 	backoff := time.Second
 	const maxBackoff = 30 * time.Second
 	streamURL := fmt.Sprintf("%s/%s/json", baseURL, topic)
@@ -99,9 +101,9 @@ func runTopicLoop(ctx context.Context, p *lokiPusher, baseURL, topic string, exp
 				return nil
 			}
 			var figureASCII string
-			if fc.Enabled && ev.Event == "message" {
+			if printTitleFigure && ev.Event == "message" {
 				if phrase := figurePhrase(ev); phrase != "" {
-					figureASCII = renderASCII(ctx, logger, phrase, fc)
+					figureASCII = renderASCII(ctx, logger, phrase, blockletPath)
 					if figureASCII != "" {
 						fmt.Println(figureASCII)
 						fmt.Println()
@@ -335,26 +337,72 @@ func truncateFigurePhrase(s string) string {
 	return string(r[:maxFigurePhraseRunes])
 }
 
-func renderASCII(ctx context.Context, logger *slog.Logger, phrase string, fc figurecfg.Config) string {
-	switch fc.Renderer {
-	case "blocklet":
-		bin := fc.BlockletBin
-		if bin == "" {
-			bin = "blocklet"
+func renderASCII(ctx context.Context, logger *slog.Logger, phrase, blockletPath string) string {
+	if blockletPath != "" {
+		out, err := blocklet.Render(ctx, blockletPath, phrase, "")
+		if err == nil {
+			s := polishBlockletFigure(strings.TrimRight(out, "\n"))
+			return applyFigureHash(s, true)
 		}
-		out, err := blocklet.Render(ctx, bin, phrase, fc.BlockletFont)
-		if err != nil {
-			logger.Warn("blocklet render failed", "err", err)
-			return ""
-		}
-		return strings.TrimRight(out, "\n")
-	default:
-		return renderGoFigure(logger, phrase, fc.GoFigureFont)
+		logger.Warn("blocklet failed, using go-figure", "err", err)
 	}
+	s := renderGoFigure(logger, phrase)
+	return applyFigureHash(s, false)
 }
 
-func renderGoFigure(logger *slog.Logger, phrase, requestedFont string) string {
-	try := func(font string) (string, error) {
+func polishBlockletFigure(s string) string {
+	if s == "" {
+		return ""
+	}
+	lines := strings.Split(s, "\n")
+	for i := range lines {
+		lines[i] = strings.TrimRight(lines[i], " ")
+	}
+	for len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "" {
+		lines = lines[:len(lines)-1]
+	}
+	maxW := 0
+	for _, ln := range lines {
+		if w := utf8.RuneCountInString(ln); w > maxW {
+			maxW = w
+		}
+	}
+	var b strings.Builder
+	for i, ln := range lines {
+		if i > 0 {
+			b.WriteByte('\n')
+		}
+		b.WriteString(ln)
+		for utf8.RuneCountInString(ln) < maxW {
+			b.WriteByte(' ')
+			ln += " "
+		}
+	}
+	return b.String()
+}
+
+func applyFigureHash(s string, on bool) string {
+	if !on || s == "" {
+		return s
+	}
+	repl := strings.NewReplacer(
+		"█", "#",
+		"▀", "#",
+		"▄", "#",
+		"▌", "|",
+		"▐", "|",
+		"░", ".",
+		"▒", ":",
+		"▓", "#",
+		"╗", "+", "╔", "+", "╝", "+", "╚", "+",
+		"║", "|", "═", "-",
+		"╣", "+", "╠", "+", "╦", "+", "╩", "+", "╬", "+",
+	)
+	return repl.Replace(s)
+}
+
+func renderGoFigure(logger *slog.Logger, phrase string) string {
+	try := func() (string, error) {
 		var art string
 		var ferr error
 		func() {
@@ -363,7 +411,7 @@ func renderGoFigure(logger *slog.Logger, phrase, requestedFont string) string {
 					ferr = fmt.Errorf("%v", r)
 				}
 			}()
-			fig := figure.NewFigure(phrase, font, false)
+			fig := figure.NewFigure(phrase, "", false)
 			art = strings.TrimRight(fig.String(), "\n")
 		}()
 		if ferr != nil {
@@ -371,14 +419,7 @@ func renderGoFigure(logger *slog.Logger, phrase, requestedFont string) string {
 		}
 		return art, nil
 	}
-	if requestedFont != "" {
-		if art, err := try(requestedFont); err == nil {
-			return art
-		} else {
-			logger.Warn("go-figure font unavailable, using standard", "font", requestedFont, "err", err)
-		}
-	}
-	art, err := try("")
+	art, err := try()
 	if err != nil {
 		logger.Error("go-figure render failed", "err", err)
 		return ""

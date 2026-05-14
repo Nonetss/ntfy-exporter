@@ -34,15 +34,20 @@ After import, choose your **Loki** data source. Panel queries use `{job="ntfy"}`
 | `LOKI_URL` | Yes | Loki base URL (e.g. `http://localhost:3100`). |
 | `LOKI_JOB` | No | Loki `job` label. Default: `ntfy`. |
 | `NTFY_EXPORT_ALL_EVENTS` | No | If `1`, `true`, `yes`, or `on`, also forwards `open` and `keepalive`. |
-| `NTFY_PRINT_TITLE_FIGURE` | No | If `1`, `true`, `yes`, or `on`, renders ASCII for each `message` event to stdout (`docker compose logs`) **and** adds **`figure_ascii`** (multiline string) to the JSON pushed to Loki. Uses **title** when set; otherwise the **first line of `message`**. Text longer than 80 runes is truncated. |
-| `NTFY_TITLE_FIGURE_RENDERER` | No | `gofigure` (default): [go-figure](https://github.com/common-nighthawk/go-figure) FIGlet fonts via `NTFY_TITLE_FIGURE_FONT`. `blocklet`: [blocklet](https://github.com/tanav-malhotra/blocklet) Unicode █ art using the **`blocklet` CLI** (Rust — use `cargo install` or the exporter Docker image; **not** `go install`). |
-| `NTFY_TITLE_FIGURE_FONT` | No | go-figure only: font name without `.flf`. Empty uses `standard`. Unknown fonts fall back to `standard` with a log warning. |
-| `NTFY_BLOCKLET_BIN` | No | blocklet only: path to the `blocklet` binary; default `blocklet` on `PATH`. Docker image installs `/usr/local/bin/blocklet`. |
-| `NTFY_BLOCKLET_FONT` | No | blocklet only: `standard`, `standard_shadow`, or `standard_solid`. **Empty** runs `blocklet --no-shadow` (solid blocks, typical █ grid). |
+| `NTFY_PRINT_TITLE_FIGURE` | No | If `1`, `true`, `yes`, or `on`, renders ASCII for each `message` event to stdout (`docker compose logs`) **and** adds **`figure_ascii`** to the JSON pushed to Loki (phrase from **title**, else **first line of `message`**, max 80 runes). **Implementation:** if `blocklet` is on `PATH` (bundled in this repo’s Docker image), uses [blocklet](https://github.com/tanav-malhotra/blocklet) solid style and normalizes to `#`/ASCII for monospace viewers; otherwise uses [go-figure](https://github.com/common-nighthawk/go-figure) `standard` font. |
 | `LOKI_TENANT_ID` | No | Sets `X-Scope-OrgID` for multi-tenant Loki. |
 | `LOKI_BASIC_AUTH_USER` / `LOKI_BASIC_AUTH_PASSWORD` | No | Basic auth toward Loki. |
 
 Each log line stored in Loki is JSON: all ntfy event fields, plus **`figure_ascii`** when `NTFY_PRINT_TITLE_FIGURE` is enabled and a phrase was rendered. Stream labels include `job`, `topic`, `source=ntfy`, and `event`, plus `priority` when present.
+
+## ASCII art on phones vs Grafana
+
+**Android and iOS notification drawers use proportional fonts** (variable glyph width). Spaces are narrower than `█`, `#`, `|`, etc., so **any multi-line ASCII art in the notification title or body will look “broken”** on the phone. That is normal and **cannot be fixed** by ntfy, this exporter, or the publisher’s formatting — only the OS/UI chooses the font.
+
+- **On the phone:** keep alerts **short and plain** (one line, no banners). Configure your alertmanager / scripts so the **message users see in ntfy is readable text**, not FIGlet or block Unicode.
+- **In Grafana / terminal:** open **`figure_ascii`** (or container logs) with a **monospace** font. When `blocklet` is used, output is normalized to `#`-style ASCII for stable columns.
+
+This exporter **does not change** what subscribers receive from ntfy; it only mirrors events to Loki and optionally adds `figure_ascii` for dashboards.
 
 ## Run locally (Go)
 
@@ -53,15 +58,9 @@ cp .env.example .env
 go run ./cmd/main
 ```
 
-With `NTFY_TITLE_FIGURE_RENDERER=blocklet`, install the blocklet CLI separately (Rust crate, **not** `go install`), for example:
+Running only the Go binary without Docker: install **`blocklet`** on your `PATH` yourself if you want block-style output (`cargo install --git https://github.com/tanav-malhotra/blocklet --tag v0.1.2`); otherwise the exporter uses **go-figure** automatically.
 
-```bash
-cargo install --git https://github.com/tanav-malhotra/blocklet --tag v0.1.2
-```
-
-Or rely on the Docker image, which bundles `blocklet` in `/usr/local/bin`.
-
-Or build a binary:
+Build a binary:
 
 ```bash
 go build -o ntfy-exporter ./cmd/main
@@ -86,7 +85,7 @@ cp .env.example .env
 docker compose up -d
 ```
 
-Optional settings from `.env.example` are passed through in `compose.yml`, including figure rendering (`NTFY_PRINT_TITLE_FIGURE`, `NTFY_TITLE_FIGURE_RENDERER`, `NTFY_TITLE_FIGURE_FONT`, `NTFY_BLOCKLET_*`). The multi-stage **Dockerfile** builds [blocklet](https://github.com/tanav-malhotra/blocklet) tag `v0.1.2` and installs it beside `ntfy-exporter`; set `NTFY_TITLE_FIGURE_RENDERER=blocklet` to use it.
+Optional settings from `.env.example` are passed through in `compose.yml`. The **Dockerfile** installs **`blocklet`** on `PATH`; with `NTFY_PRINT_TITLE_FIGURE` enabled, it is preferred over go-figure.
 
 If figures never appear, your registry image may predate this feature: build locally (`docker build -t ntfy-exporter:local .` and point `compose.yml` at that image, or add `build: .` under the service) so the binary matches this repo.
 
