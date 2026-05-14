@@ -63,6 +63,7 @@ func main() {
 	}
 	exportAll := envBool("NTFY_EXPORT_ALL_EVENTS")
 	printTitleFigure := envBool("NTFY_PRINT_TITLE_FIGURE")
+	figureFont := strings.TrimSpace(os.Getenv("NTFY_TITLE_FIGURE_FONT"))
 	figureLineWidth := envFigureLineWidth()
 
 	pusher := newLokiPusher(lokiURL, job)
@@ -75,13 +76,13 @@ func main() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			runTopicLoop(ctx, pusher, baseURL, topic, exportAll, printTitleFigure, figureLineWidth)
+			runTopicLoop(ctx, pusher, baseURL, topic, exportAll, printTitleFigure, figureFont, figureLineWidth)
 		}()
 	}
 	wg.Wait()
 }
 
-func runTopicLoop(ctx context.Context, p *lokiPusher, baseURL, topic string, exportAll, printTitleFigure bool, figureLineWidth int) {
+func runTopicLoop(ctx context.Context, p *lokiPusher, baseURL, topic string, exportAll, printTitleFigure bool, figureFont string, figureLineWidth int) {
 	backoff := time.Second
 	const maxBackoff = 30 * time.Second
 	streamURL := fmt.Sprintf("%s/%s/json", baseURL, topic)
@@ -101,7 +102,7 @@ func runTopicLoop(ctx context.Context, p *lokiPusher, baseURL, topic string, exp
 			var figureASCII string
 			if printTitleFigure && ev.Event == "message" {
 				if phrase := figurePhrase(ev, figureLineWidth); phrase != "" {
-					figureASCII = renderASCII(logger, phrase, figureLineWidth)
+					figureASCII = renderASCII(logger, phrase, figureFont, figureLineWidth)
 					if figureASCII != "" {
 						fmt.Println(figureASCII)
 						fmt.Println()
@@ -445,32 +446,32 @@ func firstLine(s string) string {
 // in go-figure's default font (figlet "standard": ~8 cols including spacing).
 const goFigureCharWidth = 8
 
-func renderASCII(logger *slog.Logger, phrase string, lineWidth int) string {
+func renderASCII(logger *slog.Logger, phrase, font string, lineWidth int) string {
 	if lineWidth <= 0 {
-		return renderGoFigure(logger, phrase)
+		return renderGoFigure(logger, phrase, font)
 	}
 	inputWrap := lineWidth / goFigureCharWidth
 	if inputWrap < 5 {
 		inputWrap = 5
 	}
-	return renderGoFigureWrapped(logger, logicalLines(phrase, inputWrap))
+	return renderGoFigureWrapped(logger, logicalLines(phrase, inputWrap), font)
 }
 
-func renderGoFigureWrapped(logger *slog.Logger, lines []string) string {
+func renderGoFigureWrapped(logger *slog.Logger, lines []string, font string) string {
 	var parts []string
 	for _, ln := range lines {
 		ln = strings.TrimSpace(ln)
 		if ln == "" {
 			continue
 		}
-		if fig := renderGoFigure(logger, ln); fig != "" {
+		if fig := renderGoFigure(logger, ln, font); fig != "" {
 			parts = append(parts, fig)
 		}
 	}
 	return strings.Join(parts, "\n\n")
 }
 
-func renderGoFigure(logger *slog.Logger, phrase string) string {
+func renderGoFigure(logger *slog.Logger, phrase, font string) string {
 	try := func() (string, error) {
 		var art string
 		var ferr error
@@ -480,7 +481,7 @@ func renderGoFigure(logger *slog.Logger, phrase string) string {
 					ferr = fmt.Errorf("%v", r)
 				}
 			}()
-			fig := figure.NewFigure(phrase, "", false)
+			fig := figure.NewFigure(phrase, font, false)
 			art = strings.TrimRight(fig.String(), "\n")
 		}()
 		if ferr != nil {
